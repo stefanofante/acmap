@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mappa Acustica · Proto v0.3 — ST-LINE Open Lab</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/leaflet-heat.js"></script>
+<script src="vendor/papaparse.min.js"></script>
+<script src="vendor/d3-contour.min.js"></script>
+<style>
+  /* === DESIGN TOKENS ST-LINE === */
+  :root {
+    --bg: #ECECEA;
+    --bg-alt: #E2E2DF;
+    --surface: #ffffff;
+    --line: #C8C8C4;
+    --line-2: #cccccc;
+    --ink: #15171a;
+    --ink-2: #44474b;
+    --accent: #91A82E;
+    --accent-2: #B5D32C;
+    --accent-glow: rgba(145,168,46,.12);
+    --area-ac: #B07A2A;
+    --area-ac-glow: rgba(176,122,42,.14);
+    --maxw: 1280px;
+    --f-sans: 'Inter Tight', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --f-mono: 'JetBrains Mono', 'Fira Mono', Consolas, Monaco, monospace;
+  }
+  [data-theme="dark"] {
+    --bg: #16181C;
+    --bg-alt: #1E2025;
+    --surface: #1c1d20;
+    --line: #2A2D33;
+    --line-2: #3a3d42;
+    --ink: #e9e6df;
+    --ink-2: #b6b3ac;
+    --accent: #92AD21;
+    --accent-2: #c8e055;
+    --accent-glow: rgba(146,173,33,.35);
+    --area-ac: #E0A95D;
+    --area-ac-glow: rgba(224,169,93,.18);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--f-sans); font-size: 15px; line-height: 1.6;
+  }
+  .container { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(16px, 3vw, 32px); }
+
+  /* === HEADER === */
+  .header-mock {
+    background: var(--surface); border-bottom: 1px solid var(--line);
+    padding: 14px 0; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2);
+  }
+  .header-mock-inner { display: flex; justify-content: space-between; align-items: center; }
+  .breadcrumb a { color: var(--ink-2); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--area-ac); }
+  .breadcrumb .sep { color: var(--line-2); margin: 0 8px; }
+  .theme-toggle {
+    background: transparent; border: 1px solid var(--line);
+    color: var(--ink-2); padding: 4px 10px; border-radius: 4px;
+    font-family: var(--f-mono); font-size: 11px; cursor: pointer;
+  }
+  .theme-toggle:hover { color: var(--ink); border-color: var(--ink-2); }
+
+  /* === HERO === */
+  .hero {
+    padding: clamp(40px, 6vw, 64px) 0 clamp(24px, 4vw, 40px);
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-family: var(--f-mono); font-size: 12px; color: var(--area-ac);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .eyebrow .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--area-ac); box-shadow: 0 0 6px var(--area-ac);
+  }
+  h1 {
+    font-size: clamp(28px, 4vw, 44px); line-height: 1.1; font-weight: 600;
+    margin: 0 0 12px; letter-spacing: -0.02em;
+  }
+  h1 em { color: var(--area-ac); font-style: normal; }
+  .hero-sub { color: var(--ink-2); font-size: clamp(15px, 1.4vw, 17px); margin: 0 0 20px; max-width: 70ch; }
+  .hero-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  .tag {
+    font-family: var(--f-mono); font-size: 11px; padding: 4px 9px;
+    border: 1px solid var(--line); border-radius: 3px; color: var(--ink-2);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .tag.beta { color: var(--area-ac); border-color: var(--area-ac); }
+  .tag.new { color: var(--accent); border-color: var(--accent); }
+
+  /* === MODE === */
+  .mode-bar {
+    display: flex; gap: 0; border: 1px solid var(--line);
+    border-radius: 6px; overflow: hidden; margin: 24px 0 16px;
+    width: fit-content;
+  }
+  .mode-btn {
+    background: transparent; border: none; padding: 10px 20px;
+    font-family: var(--f-mono); font-size: 12px; color: var(--ink-2);
+    cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase;
+    border-right: 1px solid var(--line); transition: background .15s, color .15s;
+  }
+  .mode-btn:last-child { border-right: none; }
+  .mode-btn:hover { color: var(--ink); background: var(--bg-alt); }
+  .mode-btn.active { background: var(--area-ac); color: var(--surface); }
+  [data-theme="dark"] .mode-btn.active { color: var(--bg); }
+
+  /* === LAYOUT === */
+  .tool-layout {
+    display: grid; grid-template-columns: 340px 1fr; gap: 0;
+    margin: 16px 0 40px; border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden; background: var(--surface);
+  }
+  @media (max-width: 900px) { .tool-layout { grid-template-columns: 1fr; } }
+  .sidebar {
+    background: var(--bg-alt); border-right: 1px solid var(--line);
+    padding: 20px; overflow-y: auto; max-height: 760px;
+  }
+  @media (max-width: 900px) {
+    .sidebar { border-right: none; border-bottom: 1px solid var(--line); max-height: none; }
+  }
+  .map-area { position: relative; min-height: 760px; }
+  @media (max-width: 900px) { .map-area { min-height: 500px; } }
+  #map { width: 100%; height: 100%; min-height: 760px; background: var(--bg-alt); }
+  @media (max-width: 900px) { #map { min-height: 500px; } }
+
+  /* === SIDEBAR === */
+  .panel-section {
+    margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line);
+  }
+  .panel-section:last-child { border-bottom: none; }
+  .panel-title {
+    font-family: var(--f-mono); font-size: 11px; color: var(--ink-2);
+    text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 12px;
+  }
+  .panel-label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .drop-zone {
+    border: 1.5px dashed var(--line-2); border-radius: 6px;
+    padding: 20px 14px; text-align: center; color: var(--ink-2);
+    font-size: 13px; cursor: pointer; display: block;
+    transition: border-color .15s, background .15s;
+  }
+  .drop-zone:hover { border-color: var(--area-ac); background: var(--area-ac-glow); }
+  .drop-zone.has-file {
+    border-style: solid; border-color: var(--area-ac);
+    color: var(--ink); background: var(--surface);
+  }
+  .drop-zone.drag-over { border-color: var(--area-ac); background: var(--area-ac-glow); }
+  .file-info { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); margin-top: 8px; }
+  .sample-link {
+    background: transparent; border: none; color: var(--area-ac);
+    text-decoration: underline; cursor: pointer;
+    font-family: var(--f-mono); font-size: 11px; padding: 0; margin-top: 8px;
+  }
+  .input-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
+  }
+  .input-row.full { grid-template-columns: 1fr; }
+  input[type="number"], input[type="text"], select {
+    width: 100%; padding: 6px 10px; border: 1px solid var(--line);
+    border-radius: 4px; background: var(--surface); color: var(--ink);
+    font-family: var(--f-mono); font-size: 12px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--area-ac); }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-size: 13px; color: var(--ink-2); cursor: pointer;
+  }
+  .checkbox-row input { width: auto; }
+  .btn {
+    width: 100%; padding: 10px 16px; background: var(--area-ac);
+    color: var(--surface); border: none; border-radius: 6px;
+    font-family: var(--f-mono); font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.05em; cursor: pointer; font-weight: 500;
+  }
+  [data-theme="dark"] .btn { color: var(--bg); }
+  .btn:hover { background: var(--ink); }
+  [data-theme="dark"] .btn:hover { background: var(--accent-2); }
+  .btn.ghost {
+    background: transparent; color: var(--ink-2); border: 1px solid var(--line);
+  }
+  .btn.ghost:hover { color: var(--ink); border-color: var(--ink-2); background: transparent; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-box {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 4px; padding: 10px;
+  }
+  .stat-label {
+    font-family: var(--f-mono); font-size: 10px; color: var(--ink-2);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .stat-value {
+    font-family: var(--f-mono); font-size: 18px; font-weight: 500;
+    color: var(--ink); margin-top: 2px;
+  }
+
+  /* === MAP OVERLAYS === */
+  .legend {
+    position: absolute; bottom: 16px; left: 16px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 6px; padding: 10px 14px; z-index: 1000;
+    font-family: var(--f-mono); font-size: 11px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .legend-title {
+    color: var(--ink-2); text-transform: uppercase;
+    letter-spacing: 0.05em; font-size: 10px; margin-bottom: 6px;
+  }
+  .legend-scale { display: flex; align-items: center; gap: 6px; }
+  .legend-gradient {
+    width: 140px; height: 10px;
+    background: linear-gradient(to right, #10a020 0%, #c8e055 33%, #f4a836 66%, #d8302a 100%);
+    border-radius: 2px;
+  }
+  .legend-labels {
+    display: flex; justify-content: space-between; width: 140px;
+    margin-top: 3px; color: var(--ink-2); font-size: 10px;
+  }
+
+  .fab-hint {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg);
+    padding: 8px 16px; border-radius: 20px; font-family: var(--f-mono);
+    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+    z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.2); display: none;
+  }
+  .fab-hint.active { display: block; }
+  [data-theme="dark"] .fab-hint { background: var(--accent); color: var(--bg); }
+
+  .status-bar {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 12px; z-index: 1000;
+    font-family: var(--f-mono); font-size: 11px; color: var(--ink-2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: none;
+    min-width: 220px;
+  }
+  .status-bar.active { display: block; }
+  .status-bar .ok { color: var(--accent); }
+  .status-bar .warn { color: var(--area-ac); }
+
+  .progress-bar {
+    position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 10px 24px;
+    border-radius: 4px; z-index: 1001; font-family: var(--f-mono);
+    font-size: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: none;
+  }
+  .progress-bar.active { display: block; }
+  [data-theme="dark"] .progress-bar { background: var(--accent); color: var(--bg); }
+
+  /* === DISCLAIMER & CTA === */
+  .disclaimer-strip {
+    background: var(--bg-alt); border-top: 1px solid var(--line);
+    padding: 20px 0; font-size: 13px; color: var(--ink-2);
+  }
+  .disclaimer-strip strong { color: var(--ink); }
+  .disclaimer-strip a { color: var(--area-ac); }
+
+  .cta-strip { background: var(--ink); color: var(--bg); padding: 36px 0; margin-top: 40px; }
+  [data-theme="dark"] .cta-strip {
+    background: var(--surface); color: var(--ink); border-top: 1px solid var(--line);
+  }
+  .cta-inner {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 20px;
+  }
+  .cta-text { font-size: 18px; line-height: 1.4; max-width: 600px; }
+  .cta-text small {
+    display: block; font-family: var(--f-mono); font-size: 11px;
+    color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  [data-theme="dark"] .cta-text small { color: var(--ink-2); }
+  .cta-btn {
+    background: var(--area-ac); color: var(--ink); padding: 12px 24px;
+    border-radius: 6px; text-decoration: none; font-family: var(--f-mono);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+  }
+  .cta-btn:hover { background: var(--accent-2); }
+
+  /* === DOC === */
+  .doc-section { padding: 40px 0; }
+  .doc-section h2 { font-size: 24px; margin: 0 0 16px; font-weight: 600; }
+  .doc-section h3 { font-size: 18px; margin: 24px 0 10px; font-weight: 600; }
+  .doc-section p, .doc-section ul { color: var(--ink-2); max-width: 70ch; }
+  .doc-section ul li { margin-bottom: 6px; }
+  .doc-section code {
+    font-family: var(--f-mono); background: var(--bg-alt);
+    padding: 2px 6px; border-radius: 3px; font-size: 12px; color: var(--ink);
+  }
+  .doc-section pre {
+    font-family: var(--f-mono); background: var(--bg-alt);
+    padding: 12px; border-radius: 4px; font-size: 11.5px;
+    overflow-x: auto; color: var(--ink); border: 1px solid var(--line); max-width: 100%;
+  }
+
+  /* === LEAFLET === */
+  .leaflet-container { background: var(--bg-alt); font-family: var(--f-sans); }
+  .source-marker {
+    background: var(--area-ac); border: 2px solid var(--surface);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--area-ac), 0 0 12px var(--area-ac-glow);
+  }
+  .leaflet-tooltip {
+    background: var(--ink); color: var(--bg); border: none;
+    font-family: var(--f-mono); font-size: 11px; padding: 4px 8px;
+  }
+  .leaflet-tooltip::before { border: none; }
+
+  .val-table {
+    width: 100%; max-width: 760px; border-collapse: collapse;
+    font-family: var(--f-mono); font-size: 12px; margin-top: 12px;
+  }
+  .val-table th, .val-table td {
+    padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line);
+  }
+  .val-table th {
+    color: var(--ink-2); text-transform: uppercase;
+    letter-spacing: 0.05em; font-size: 10px; font-weight: normal;
+  }
+  .val-table td.calc { color: var(--area-ac); }
+  .val-table td.delta { color: var(--ink-2); }
+
+  /* === v0.3: BUILDING LABELS === */
+  .bld-label {
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font-family: var(--f-mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-shadow: 0 0 3px var(--surface), 0 0 6px var(--surface);
+    pointer-events: none;
+    text-align: center;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  [data-theme="dark"] .bld-label {
+    text-shadow: 0 0 3px #000, 0 0 6px #000;
+  }
+  .bld-label.estimated {
+    color: var(--ink-2);
+    font-style: italic;
+  }
+  .bld-label.estimated::after {
+    content: "*";
+    color: var(--area-ac);
+    margin-left: 1px;
+  }
+
+  /* === v0.3: BUILDING STATS QUALITY === */
+  .quality-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    padding: 3px 0;
+    color: var(--ink-2);
+  }
+  .quality-row .num { color: var(--ink); font-weight: 500; }
+  .quality-row.warn .num { color: var(--area-ac); }
+  .quality-warn {
+    background: var(--area-ac-glow);
+    border-left: 2px solid var(--area-ac);
+    padding: 6px 10px;
+    margin-top: 6px;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    color: var(--area-ac);
+    line-height: 1.4;
+  }
+
+  /* === v0.3: BUILDING DRAWER === */
+  .bld-drawer {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 280px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    padding: 16px;
+    z-index: 1001;
+    font-size: 13px;
+    display: none;
+  }
+  .bld-drawer.active { display: block; }
+  .bld-drawer-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    line-height: 1;
+  }
+  .bld-drawer-close:hover { color: var(--ink); }
+  .bld-drawer h4 {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--area-ac);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 12px;
+    font-weight: 500;
+  }
+  .bld-drawer-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--f-mono);
+    font-size: 12px;
+  }
+  .bld-drawer-row:last-of-type { border-bottom: none; }
+  .bld-drawer-row .k { color: var(--ink-2); }
+  .bld-drawer-row .v { color: var(--ink); font-weight: 500; text-align: right; }
+  .bld-drawer-row .v.estimated { color: var(--area-ac); font-style: italic; }
+  .bld-drawer-row .v a { color: var(--area-ac); text-decoration: none; }
+  .bld-drawer-row .v a:hover { text-decoration: underline; }
+</style>
+</head>
+<body data-theme="dark">
+
+<!-- === HEADER === -->
+<header class="header-mock">
+  <div class="container header-mock-inner">
+    <div class="breadcrumb">
+      <a href="#">ST-LINE</a>
+      <span class="sep">/</span>
+      <a href="#">Open Lab</a>
+      <span class="sep">/</span>
+      <span>Mappa acustica</span>
+    </div>
+    <button class="theme-toggle" id="theme-toggle">☀ light</button>
+  </div>
+</header>
+
+<!-- === HERO === -->
+<section class="hero">
+  <div class="container">
+    <p class="eyebrow"><span class="dot"></span>OPEN LAB · ACUSTICA</p>
+    <h1>Mappa <em>acustica</em>.</h1>
+    <p class="hero-sub">
+      Strumento dimostrativo per visualizzare rilievi fonometrici e simulare propagazione
+      da sorgenti puntuali con il metodo ISO 9613-2 incluso diffrazione su edifici reali
+      (geometria da OpenStreetMap). Tutto in browser — i tuoi dati non lasciano questa pagina.
+    </p>
+    <div class="hero-meta">
+      <span class="tag beta">PROTO · v0.3</span>
+      <span class="tag">ISO 9613-2</span>
+      <span class="tag">Diffrazione Maekawa</span>
+      <span class="tag">Edifici OSM</span>
+      <span class="tag new">★ Trasparenza dati</span>
+    </div>
+
+    <div class="mode-bar" role="tablist">
+      <button class="mode-btn active" data-mode="measure">★ Misura</button>
+      <button class="mode-btn" data-mode="predict">⚡ Previsione</button>
+    </div>
+  </div>
+</section>
+
+<!-- === TOOL === -->
+<div class="container">
+  <div class="tool-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- ============ MEASURE ============ -->
+      <div id="panel-measure">
+        <div class="panel-section">
+          <h3 class="panel-title">1 · Carica rilievi</h3>
+          <label class="drop-zone" id="drop-zone">
+            <strong>Trascina un CSV</strong><br>
+            <span class="file-info">colonne: <code>lat, lon, leq</code></span>
+            <input type="file" id="csv-input" accept=".csv,.txt" hidden>
+          </label>
+          <button class="sample-link" id="load-sample-measure">↓ Carica dataset esempio (Treviso, 47 punti)</button>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">2 · Visualizzazione</h3>
+          <label class="checkbox-row"><input type="checkbox" id="show-points" checked> Punti misura colorati</label>
+          <label class="checkbox-row"><input type="checkbox" id="show-heatmap" checked> Heatmap kernel density</label>
+          <label class="checkbox-row"><input type="checkbox" id="show-isolines"> Isolinee interpolate (IDW)</label>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">3 · Limite normativo</h3>
+          <label class="panel-label">DPCM 14/11/97 — Classe</label>
+          <select id="class-norm">
+            <option value="">Nessun limite</option>
+            <option value="I:50:40">I · Aree protette (50/40)</option>
+            <option value="II:55:45">II · Prevalentemente residenziale (55/45)</option>
+            <option value="III:60:50" selected>III · Tipo misto (60/50)</option>
+            <option value="IV:65:55">IV · Intensa attività umana (65/55)</option>
+            <option value="V:70:60">V · Prevalentemente industriale (70/60)</option>
+            <option value="VI:70:70">VI · Esclusivamente industriale (70/70)</option>
+          </select>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">Statistiche</h3>
+          <div class="stats-grid">
+            <div class="stat-box"><div class="stat-label">Punti</div><div class="stat-value" id="stat-points">—</div></div>
+            <div class="stat-box"><div class="stat-label">Leq medio</div><div class="stat-value" id="stat-mean">—</div></div>
+            <div class="stat-box"><div class="stat-label">Min · Max</div><div class="stat-value" id="stat-range">—</div></div>
+            <div class="stat-box"><div class="stat-label">Sopra limite</div><div class="stat-value" id="stat-over">—</div></div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">Esporta</h3>
+          <button class="btn ghost" id="btn-export-geojson" style="margin-bottom:8px">↓ GeoJSON</button>
+          <button class="btn ghost" id="btn-export-csv">↓ CSV ripulito</button>
+        </div>
+      </div>
+
+      <!-- ============ PREDICT ============ -->
+      <div id="panel-predict" style="display:none">
+
+        <div class="panel-section">
+          <h3 class="panel-title">Sorgente puntuale</h3>
+          <p style="font-size:12px;color:var(--ink-2);margin:0 0 12px">
+            Clicca sulla mappa per piazzare la sorgente.
+            Gli edifici intorno vengono scaricati da OpenStreetMap.
+          </p>
+          <div class="input-row">
+            <div>
+              <label class="panel-label">L<sub>w</sub> (dB)</label>
+              <input type="number" value="105" min="50" max="150" id="src-lw">
+            </div>
+            <div>
+              <label class="panel-label">h<sub>s</sub> (m)</label>
+              <input type="number" value="2" min="0.1" max="50" step="0.5" id="src-h">
+            </div>
+          </div>
+          <label class="panel-label">Spettro tipico</label>
+          <select id="src-spectrum">
+            <option value="flat" selected>Banda larga piatta</option>
+            <option value="traffic">Stradale (NMPB-Routes)</option>
+            <option value="rail">Ferroviario</option>
+            <option value="industrial">Industriale tipico</option>
+            <option value="lowfreq">Basse frequenze (HVAC)</option>
+          </select>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">Edifici (OpenStreetMap)</h3>
+          <p style="font-size:11px;color:var(--ink-2);margin:0 0 8px;font-family:var(--f-mono)" id="bld-status">
+            Nessun edificio caricato.
+          </p>
+          <div id="bld-quality" style="display:none;margin-bottom:10px">
+            <div class="quality-row"><span>Totali</span><span class="num" id="q-total">0</span></div>
+            <div class="quality-row"><span>Altezza OSM reale</span><span class="num" id="q-real">0</span></div>
+            <div class="quality-row warn"><span>Altezza stimata*</span><span class="num" id="q-est">0</span></div>
+            <div class="quality-row"><span>Media · max</span><span class="num" id="q-mean">— · —</span></div>
+            <div id="q-warn-banner" class="quality-warn" style="display:none"></div>
+          </div>
+          <label class="checkbox-row"><input type="checkbox" id="show-buildings" checked> Visualizza edifici</label>
+          <label class="checkbox-row"><input type="checkbox" id="show-bld-labels"> Etichette altezza (zoom alto)</label>
+          <label class="checkbox-row"><input type="checkbox" id="enable-diffraction" checked> Calcola diffrazione</label>
+          <label class="panel-label" style="margin-top:8px">Altezza default (m)</label>
+          <input type="number" value="9" min="3" max="40" step="1" id="bld-default-h">
+          <p style="font-size:10.5px;color:var(--ink-2);margin:4px 0 0;font-family:var(--f-mono)">
+            * Stimata = nessun tag <code>height</code> né <code>building:levels</code> in OSM
+          </p>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">Ricevitore · griglia</h3>
+          <div class="input-row">
+            <div>
+              <label class="panel-label">h<sub>r</sub> (m)</label>
+              <input type="number" value="4" min="0.5" max="50" step="0.5" id="rec-h">
+            </div>
+            <div>
+              <label class="panel-label">Estensione (m)</label>
+              <input type="number" value="300" min="50" max="1000" step="50" id="grid-extent">
+            </div>
+          </div>
+          <div class="input-row">
+            <div>
+              <label class="panel-label">Passo (m)</label>
+              <input type="number" value="15" min="5" max="50" step="5" id="grid-step">
+            </div>
+            <div>
+              <label class="panel-label">G suolo</label>
+              <input type="number" value="0.5" min="0" max="1" step="0.1" id="ground-G">
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">Atmosfera</h3>
+          <div class="input-row">
+            <div>
+              <label class="panel-label">T (°C)</label>
+              <input type="number" value="15" min="-20" max="40" id="atm-T">
+            </div>
+            <div>
+              <label class="panel-label">RH (%)</label>
+              <input type="number" value="70" min="10" max="100" id="atm-RH">
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">Visualizzazione</h3>
+          <label class="checkbox-row"><input type="checkbox" id="show-prediction" checked> Griglia ricevitori</label>
+          <label class="checkbox-row"><input type="checkbox" id="show-iso-bands" checked> Isolinee (5 dB)</label>
+        </div>
+
+        <div class="panel-section">
+          <button class="btn" id="btn-calc">⚡ Ricalcola</button>
+          <p id="calc-status" style="font-family:var(--f-mono);font-size:11px;color:var(--ink-2);margin:8px 0 0;text-align:center"></p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAP -->
+    <div class="map-area">
+      <div class="fab-hint" id="fab-hint">Clicca sulla mappa per piazzare la sorgente →</div>
+      <div class="progress-bar" id="progress-bar"></div>
+      <div class="status-bar" id="status-bar"></div>
+      <div class="bld-drawer" id="bld-drawer">
+        <button class="bld-drawer-close" id="bld-drawer-close">×</button>
+        <h4>Dettaglio edificio</h4>
+        <div id="bld-drawer-body"></div>
+      </div>
+      <div id="map"></div>
+      <div class="legend">
+        <div class="legend-title">Leq dB(A)</div>
+        <div class="legend-scale"><div class="legend-gradient"></div></div>
+        <div class="legend-labels">
+          <span>35</span><span>50</span><span>65</span><span>80</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- === DISCLAIMER === -->
+<section class="disclaimer-strip">
+  <div class="container">
+    <strong>Proto dimostrativo.</strong> Implementa ISO 9613-2 con diffrazione singola (Maekawa)
+    su edifici importati da OpenStreetMap. <strong>Limitazioni note</strong>: solo diffrazione
+    sopra l'edificio (non attorno), un solo edificio per traiettoria sorgente→ricevitore
+    (no multi-diffrazione), altezze edifici stimate da <code>building:levels</code> × 3m se
+    OSM non riporta <code>height</code>, nessuna riflessione, nessuna modellazione di scarti
+    o passaggi tra edifici. <strong>Non sostituisce un software omologato</strong> per asseverazioni
+    o perizie.
+  </div>
+</section>
+
+<!-- === CTA === -->
+<section class="cta-strip">
+  <div class="container cta-inner">
+    <div class="cta-text">
+      <small>★ Costruito su strada per Acustica Pro</small>
+      Questo è il workflow che Acustica Pro porterà nel tuo studio:
+      misura → analisi normativa → previsione con diffrazione. Tracciabilità peritale automatica,
+      formato progetto aperto, normativa italiana versionata.
+    </div>
+    <a href="#" class="cta-btn">Diventa pilot tester →</a>
+  </div>
+</section>
+
+<!-- === DOC === -->
+<section class="doc-section">
+  <div class="container">
+    <h2>Come funziona</h2>
+
+    <h3>Modalità Previsione con diffrazione</h3>
+    <p>
+      Quando piazzi una sorgente, lo strumento scarica automaticamente la geometria degli
+      edifici nell'intorno (raggio = estensione griglia) da <strong>OpenStreetMap via Overpass API</strong>.
+      Per ogni ricevitore della griglia, traccia il segmento sorgente→ricevitore e cerca
+      il primo edificio intercettato. Se esiste, calcola l'attenuazione di diffrazione con
+      la formula <strong>Maekawa</strong> ISO 9613-2 §7.4 banda per banda 1/3 ottava:
+    </p>
+    <pre>delta = (d_ST + d_TR) - d_SR     // differenza di cammino
+N = 2·delta/lambda               // numero di Fresnel
+A_dif = 10·log10(3 + 20·N)       // attenuazione dB (clamp 0-25)</pre>
+    <p>
+      Dove <code>T</code> è la quota top dell'edificio intercettato. La quota viene presa dal
+      tag <code>height</code> di OSM se presente, altrimenti calcolata come <code>building:levels × 3m</code>,
+      con fallback al valore di default impostato in interfaccia.
+    </p>
+
+    <h3>Termini calcolati</h3>
+    <ul>
+      <li><code>A_div = 20·log₁₀(d) + 11</code> — divergenza geometrica (ISO 9613-2 §7.1)</li>
+      <li><code>A_atm = α(f, T, RH) · d</code> — assorbimento atmosferico (ISO 9613-1)</li>
+      <li><code>A_gr</code> — effetto suolo, formula generale con G-factor (ISO 9613-2 §7.3.2)</li>
+      <li><code>A_dif</code> — diffrazione Maekawa (ISO 9613-2 §7.4) <span style="color:var(--accent)">★ nuovo in v0.2</span></li>
+    </ul>
+
+    <h3>Cosa NON fa questo proto</h3>
+    <ul>
+      <li>Multi-diffrazione (più edifici in cascata)</li>
+      <li>Diffrazione laterale (intorno all'edificio, non solo sopra)</li>
+      <li>Sorgenti multiple, lineari o areali</li>
+      <li>Riflessioni multiple su facciate</li>
+      <li>Modello CNOSSOS-EU o NMPB-Routes-2008</li>
+      <li>Verifica accuratezza dell'altezza edificio (stimata da building:levels se manca <code>height</code>)</li>
+    </ul>
+
+    <h3>Validazione</h3>
+    <p>Sorgente Lw=100 dB(A) banda larga piatta, h<sub>s</sub>=1.5m, h<sub>r</sub>=1.5m, terreno morbido, T=15°C, RH=70%.</p>
+    <table class="val-table">
+      <thead><tr><th>Distanza</th><th>Calcolato</th><th>Atteso</th><th>Δ</th></tr></thead>
+      <tbody>
+        <tr><td>10 m</td><td class="calc" id="val-10">—</td><td>65–72</td><td class="delta" id="val-10-d">—</td></tr>
+        <tr><td>100 m</td><td class="calc" id="val-100">—</td><td>40–48</td><td class="delta" id="val-100-d">—</td></tr>
+        <tr><td>500 m</td><td class="calc" id="val-500">—</td><td>20–28</td><td class="delta" id="val-500-d">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+// =====================================================================
+// PHYSICS — ISO 9613-2 + Maekawa diffraction
+// =====================================================================
+
+const SPECTRA = {
+  flat: { 63: -9.03, 125: -9.03, 250: -9.03, 500: -9.03, 1000: -9.03, 2000: -9.03, 4000: -9.03, 8000: -9.03 },
+  traffic: { 63: -14, 125: -10, 250: -7, 500: -6, 1000: -5, 2000: -7, 4000: -11, 8000: -16 },
+  rail: { 63: -16, 125: -13, 250: -9, 500: -6, 1000: -5, 2000: -6, 4000: -10, 8000: -15 },
+  industrial: { 63: -11, 125: -10, 250: -9, 500: -8, 1000: -8, 2000: -9, 4000: -10, 8000: -13 },
+  lowfreq: { 63: -5, 125: -6, 250: -8, 500: -10, 1000: -12, 2000: -15, 4000: -19, 8000: -23 }
+};
+
+const A_WEIGHTING = { 63: -26.2, 125: -16.1, 250: -8.6, 500: -3.2, 1000: 0.0, 2000: 1.2, 4000: 1.0, 8000: -1.1 };
+const FREQ_BANDS = [63, 125, 250, 500, 1000, 2000, 4000, 8000];
+const SPEED_OF_SOUND = 343.0;
+
+function atmosphericAttenuation(f, T_c, RH, p_kPa = 101.325) {
+  const T = T_c + 273.15, T0 = 293.15;
+  const pa_pr = p_kPa / 101.325;
+  const psat_pr = pa_pr * Math.pow(10, -6.8346 * Math.pow(273.16 / T, 1.261) + 4.6151);
+  const h = RH * psat_pr / pa_pr;
+  const frO = pa_pr * (24 + 4.04e4 * h * (0.02 + h) / (0.391 + h));
+  const frN = pa_pr * Math.pow(T / T0, -0.5) * (9 + 280 * h * Math.exp(-4.170 * (Math.pow(T / T0, -1/3) - 1)));
+  return 8.686 * f * f * (
+    1.84e-11 * (1/pa_pr) * Math.sqrt(T/T0)
+    + Math.pow(T/T0, -2.5) * (
+      0.01275 * Math.exp(-2239.1/T) / (frO + f*f/frO)
+      + 0.1068 * Math.exp(-3352.0/T) / (frN + f*f/frN)
+    )
+  );
+}
+
+function groundAttenuation(d, hs, hr, G) {
+  if (d < 1) return 0;
+  const hm = (hs + hr) / 2.0;
+  const Agr_soft = 4.8 - (2.0 * hm / d) * (17.0 + 300.0 / d);
+  const Agr_hard = -3.0;
+  return Math.max(G * Agr_soft + (1.0 - G) * Agr_hard, -3.0);
+}
+
+/**
+ * Maekawa diffraction attenuation (single screen, over the top).
+ * @param {number} f_hz Frequency
+ * @param {number} delta path difference (m), >0 means screen blocks LOS
+ */
+function maekawaAttenuation(f_hz, delta) {
+  if (delta <= 0) return 0;
+  const lambda = SPEED_OF_SOUND / f_hz;
+  const N = 2 * delta / lambda;
+  if (N < 0) return 0;
+  const val = 3 + 20 * N;
+  if (val <= 1) return 0;
+  const Db = 10 * Math.log10(val);
+  return Math.max(0, Math.min(25, Db));
+}
+
+/**
+ * Calcola la differenza di cammino per diffrazione su un edificio.
+ * 2D verticale lungo la traiettoria S-R.
+ *
+ * @param {number} d_sb distanza sorgente -> base edificio (m)
+ * @param {number} d_br distanza base edificio -> ricevitore (m)
+ * @param {number} hs altezza sorgente
+ * @param {number} hr altezza ricevitore
+ * @param {number} hb altezza top edificio
+ * @returns {number} delta (m), 0 se LOS non bloccata
+ */
+function pathDelta(d_sb, d_br, hs, hr, hb) {
+  const d_sr = d_sb + d_br;
+  if (d_sr < 1) return 0;
+  // Quota del LOS diretto S-R alla posizione dell'edificio
+  const y_los = hs + (d_sb / d_sr) * (hr - hs);
+  if (hb <= y_los) return 0;  // LOS passa sopra l'edificio
+  const d_st = Math.sqrt(d_sb*d_sb + (hb - hs)*(hb - hs));
+  const d_tr = Math.sqrt(d_br*d_br + (hr - hb)*(hr - hb));
+  const d_sr_direct = Math.sqrt(d_sr*d_sr + (hr - hs)*(hr - hs));
+  return d_st + d_tr - d_sr_direct;
+}
+
+/**
+ * Calcola Leq A-pesato totale al ricevitore.
+ * @param diffractionDelta delta di cammino se diffraction attiva, 0 altrimenti
+ */
+function propagatePoint(LwTotal, spectrum, dist, hs, hr, T, RH, G, diffractionDelta = 0) {
+  if (dist < 1) dist = 1;
+  const A_div = 20 * Math.log10(dist) + 11;
+  const A_gr = groundAttenuation(dist, hs, hr, G);
+
+  let energy = 0;
+  for (const f of FREQ_BANDS) {
+    const Lw_band = LwTotal + spectrum[f];
+    const A_atm = atmosphericAttenuation(f, T, RH) * dist;
+    const A_dif = maekawaAttenuation(f, diffractionDelta);
+    const Lp = Lw_band - A_div - A_atm - A_gr - A_dif;
+    energy += Math.pow(10, (Lp + A_WEIGHTING[f]) / 10);
+  }
+  if (energy <= 0) return -Infinity;
+  return 10 * Math.log10(energy);
+}
+
+// =====================================================================
+// GEOMETRY — ray-segment vs polygon intersection
+// =====================================================================
+
+/**
+ * Ray casting: trova il primo segmento di poligono intersecato dal segmento (x1,y1)-(x2,y2).
+ * Restituisce {t, edge} dove t in [0,1] è la frazione del segmento.
+ */
+function segIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const den = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / den;
+  const u = -((x1-x2)*(y1-y3) - (y1-y2)*(x1-x3)) / den;
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+    return { t, x: x1 + t*(x2-x1), y: y1 + t*(y2-y1) };
+  }
+  return null;
+}
+
+/**
+ * Trova primo edificio intercettato dal raggio (x1,y1)->(x2,y2).
+ * buildings = array di {polygon: [[x,y],[x,y],...], height: number}
+ * polygons in coordinate locali (metri da sorgente)
+ * Restituisce {dSourceBld, dBldRec, height} o null.
+ */
+function firstBuildingHit(x1, y1, x2, y2, buildings, sourceX, sourceY) {
+  let best = null;
+  const totalLen = Math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1));
+
+  for (const bld of buildings) {
+    const poly = bld.polygon;
+    // Pre-check bounding box (cheap)
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const [px, py] of poly) {
+      if (px < minX) minX = px; if (px > maxX) maxX = px;
+      if (py < minY) minY = py; if (py > maxY) maxY = py;
+    }
+    if (Math.min(x1,x2) > maxX || Math.max(x1,x2) < minX) continue;
+    if (Math.min(y1,y2) > maxY || Math.max(y1,y2) < minY) continue;
+
+    // Test each polygon edge
+    let firstT = Infinity;
+    let firstHit = null;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const hit = segIntersect(x1, y1, x2, y2,
+        poly[i][0], poly[i][1], poly[i+1][0], poly[i+1][1]);
+      if (hit && hit.t < firstT) {
+        firstT = hit.t;
+        firstHit = hit;
+      }
+    }
+    if (firstHit && firstT < (best ? best.t : Infinity)) {
+      // Approssimazione: il "top" dell'edificio è al punto di intersezione del bordo
+      const dS = Math.sqrt(firstHit.x*firstHit.x + firstHit.y*firstHit.y);
+      const dR = totalLen - dS;
+      best = { t: firstT, dSourceBld: dS, dBldRec: dR, height: bld.height };
+    }
+  }
+  return best;
+}
+
+/**
+ * Converte lat/lon polygon a coordinate locali metri (relativo a sourceLat/Lon).
+ */
+function toLocal(latlng, srcLat, srcLng) {
+  const dLat = (latlng[0] - srcLat) * 111111;
+  const dLon = (latlng[1] - srcLng) * 111111 * Math.cos(srcLat * Math.PI / 180);
+  return [dLon, dLat];  // x=east, y=north
+}
+
+// =====================================================================
+// OVERPASS API — fetch buildings
+// =====================================================================
+
+async function fetchBuildings(centerLat, centerLng, radiusMeters) {
+  // bbox calc
+  const dLat = radiusMeters / 111111;
+  const dLng = radiusMeters / (111111 * Math.cos(centerLat * Math.PI / 180));
+  const south = centerLat - dLat, north = centerLat + dLat;
+  const west = centerLng - dLng, east = centerLng + dLng;
+  const bbox = `${south},${west},${north},${east}`;
+
+  const query = `[out:json][timeout:25];
+(
+  way["building"](${bbox});
+  relation["building"](${bbox});
+);
+out body geom;`;
+
+  const url = 'https://overpass-api.de/api/interpreter';
+  const resp = await fetch(url, {
+    method: 'POST',
+    body: 'data=' + encodeURIComponent(query),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  if (!resp.ok) throw new Error(`Overpass ${resp.status}`);
+  const json = await resp.json();
+  return parseOverpassBuildings(json, centerLat, centerLng);
+}
+
+function parseOverpassBuildings(osmJson, srcLat, srcLng) {
+  const defaultH = parseFloat(document.getElementById('bld-default-h').value);
+  const buildings = [];
+
+  for (const el of osmJson.elements || []) {
+    if (!el.geometry && !el.members) continue;
+    const tags = el.tags || {};
+
+    let h = null;
+    let heightSource = 'default';  // 'height' | 'levels' | 'default'
+    let levelsVal = null;
+    if (tags.height) {
+      const parsed = parseFloat(tags.height);
+      if (!isNaN(parsed) && parsed > 0) {
+        h = parsed;
+        heightSource = 'height';
+      }
+    }
+    if (h === null && tags['building:levels']) {
+      const lv = parseFloat(tags['building:levels']);
+      if (!isNaN(lv) && lv > 0) {
+        h = lv * 3.0;
+        levelsVal = lv;
+        heightSource = 'levels';
+      }
+    }
+    if (h === null || isNaN(h)) {
+      h = defaultH;
+      heightSource = 'default';
+    }
+
+    // Way -> single polygon
+    if (el.type === 'way' && el.geometry) {
+      const polyLatLng = el.geometry.map(g => [g.lat, g.lon]);
+      if (polyLatLng.length > 2) {
+        const first = polyLatLng[0], last = polyLatLng[polyLatLng.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) {
+          polyLatLng.push([first[0], first[1]]);
+        }
+      }
+      const polyLocal = polyLatLng.map(p => toLocal(p, srcLat, srcLng));
+      // Calculate centroid for label placement
+      const centroid = polygonCentroid(polyLatLng);
+      buildings.push({
+        polygon: polyLocal,
+        polygonLatLng: polyLatLng,
+        centroid,
+        height: h,
+        heightSource,
+        levelsVal,
+        osmId: el.id,
+        tags
+      });
+    }
+  }
+  return buildings;
+}
+
+function polygonCentroid(polyLatLng) {
+  let sumLat = 0, sumLng = 0;
+  const n = polyLatLng.length - 1;  // last point is duplicate of first
+  for (let i = 0; i < n; i++) {
+    sumLat += polyLatLng[i][0];
+    sumLng += polyLatLng[i][1];
+  }
+  return [sumLat / n, sumLng / n];
+}
+
+// =====================================================================
+// SAMPLE DATA
+// =====================================================================
+
+function generateSampleData() {
+  const data = [];
+  const center = [45.66, 12.24];
+  const seed = (n) => { const x = Math.sin(n) * 10000; return x - Math.floor(x); };
+  for (let i = 0; i < 47; i++) {
+    const dLat = (seed(i * 3.7) - 0.5) * 0.015;
+    const dLon = (seed(i * 5.3) - 0.5) * 0.02;
+    const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+    const leq = Math.max(42, 70 - dist * 1200 + (seed(i * 7.1) - 0.5) * 10);
+    data.push({ lat: center[0] + dLat, lon: center[1] + dLon, leq: Math.round(leq * 10) / 10 });
+  }
+  return data;
+}
+
+// =====================================================================
+// THEME
+// =====================================================================
+
+const themeToggle = document.getElementById('theme-toggle');
+themeToggle.addEventListener('click', () => {
+  const cur = document.body.getAttribute('data-theme') || 'light';
+  const nxt = cur === 'dark' ? 'light' : 'dark';
+  document.body.setAttribute('data-theme', nxt);
+  themeToggle.textContent = nxt === 'dark' ? '☀ light' : '☾ dark';
+});
+
+// =====================================================================
+// MAP
+// =====================================================================
+
+const map = L.map('map').setView([45.66, 12.24], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap',
+  maxZoom: 19
+}).addTo(map);
+
+const colorForLevel = (db) => {
+  if (db < 50) return '#10a020';
+  if (db < 60) return '#c8e055';
+  if (db < 70) return '#f4a836';
+  return '#d8302a';
+};
+const opacityForLevel = (db) => {
+  if (db < 35) return 0;
+  if (db < 45) return 0.30;
+  if (db < 55) return 0.50;
+  return 0.65;
+};
+
+// =====================================================================
+// MODE
+// =====================================================================
+
+let currentMode = 'measure';
+let measureData = [];
+let buildings = [];
+let buildingLayer = L.layerGroup();
+let sourceMarker = null;
+let predictionLayer = L.layerGroup();
+let measureLayer = L.layerGroup().addTo(map);
+
+const panelMeasure = document.getElementById('panel-measure');
+const panelPredict = document.getElementById('panel-predict');
+const fabHint = document.getElementById('fab-hint');
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
+    if (currentMode === 'measure') {
+      panelMeasure.style.display = 'block';
+      panelPredict.style.display = 'none';
+      fabHint.classList.remove('active');
+      clearPredictionLayer();
+      clearBuildingLayer();
+      renderMeasure();
+    } else {
+      panelMeasure.style.display = 'none';
+      panelPredict.style.display = 'block';
+      fabHint.classList.add('active');
+      clearMeasureLayer();
+    }
+  });
+});
+
+// =====================================================================
+// MEASURE
+// =====================================================================
+
+function clearMeasureLayer() {
+  if (measureLayer) map.removeLayer(measureLayer);
+  measureLayer = null;
+}
+
+function renderMeasure() {
+  clearMeasureLayer();
+  if (!measureData.length) {
+    ['stat-points','stat-mean','stat-range','stat-over'].forEach(id =>
+      document.getElementById(id).textContent = '—');
+    return;
+  }
+  measureLayer = L.layerGroup().addTo(map);
+
+  const showPoints = document.getElementById('show-points').checked;
+  const showHeat = document.getElementById('show-heatmap').checked;
+  const showIso = document.getElementById('show-isolines').checked;
+
+  if (showPoints) {
+    measureData.forEach(p => {
+      L.circleMarker([p.lat, p.lon], {
+        radius: 7, fillColor: colorForLevel(p.leq), color: '#fff',
+        weight: 1.5, fillOpacity: 0.9
+      })
+      .bindTooltip(`${p.leq.toFixed(1)} dBA`, { direction: 'top', offset: [0, -7] })
+      .addTo(measureLayer);
+    });
+  }
+  if (showHeat) {
+    const heatData = measureData.map(p => [p.lat, p.lon, Math.max(0, (p.leq - 35) / 50)]);
+    L.heatLayer(heatData, {
+      radius: 35, blur: 25, maxZoom: 17,
+      gradient: { 0.2: '#10a020', 0.5: '#c8e055', 0.7: '#f4a836', 1: '#d8302a' }
+    }).addTo(measureLayer);
+  }
+  if (showIso) renderIsolinesIDW();
+
+  updateStats();
+  if (measureData.length) {
+    map.fitBounds(L.latLngBounds(measureData.map(p => [p.lat, p.lon])),
+      { padding: [40, 40], maxZoom: 16 });
+  }
+}
+
+function renderIsolinesIDW() {
+  if (measureData.length < 3) return;
+  const lats = measureData.map(p => p.lat), lons = measureData.map(p => p.lon);
+  const latMin = Math.min(...lats), latMax = Math.max(...lats);
+  const lonMin = Math.min(...lons), lonMax = Math.max(...lons);
+  const pad = 0.002, N = 30;
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const lat = latMin - pad + (latMax + pad - (latMin - pad)) * i / (N - 1);
+      const lon = lonMin - pad + (lonMax + pad - (lonMin - pad)) * j / (N - 1);
+      let sumW = 0, sumWZ = 0, exact = null;
+      for (const pt of measureData) {
+        const dLat = (lat - pt.lat) * 111111;
+        const dLon = (lon - pt.lon) * 111111 * Math.cos(lat * Math.PI / 180);
+        const d = Math.sqrt(dLat * dLat + dLon * dLon);
+        if (d < 0.5) { exact = pt.leq; break; }
+        const w = 1 / (d * d);
+        sumW += w; sumWZ += w * pt.leq;
+      }
+      const val = exact !== null ? exact : sumWZ / sumW;
+      L.circleMarker([lat, lon], {
+        radius: 4, fillColor: colorForLevel(val), fillOpacity: 0.35, stroke: false
+      }).addTo(measureLayer);
+    }
+  }
+}
+
+function updateStats() {
+  if (!measureData.length) return;
+  const leqs = measureData.map(p => p.leq);
+  document.getElementById('stat-points').textContent = leqs.length;
+  document.getElementById('stat-mean').textContent =
+    (leqs.reduce((a,b)=>a+b,0)/leqs.length).toFixed(1);
+  document.getElementById('stat-range').textContent =
+    `${Math.min(...leqs).toFixed(0)} · ${Math.max(...leqs).toFixed(0)}`;
+  const norm = document.getElementById('class-norm').value;
+  if (norm) {
+    const limit = parseFloat(norm.split(':')[1]);
+    const over = leqs.filter(l => l > limit).length;
+    document.getElementById('stat-over').textContent = Math.round(over / leqs.length * 100) + '%';
+  } else {
+    document.getElementById('stat-over').textContent = '—';
+  }
+}
+
+// CSV parsing (stessa logica v0.1)
+function parseCSV(text) {
+  const result = Papa.parse(text, {
+    header: true, skipEmptyLines: true, dynamicTyping: true,
+    delimitersToGuess: [',', ';', '\t']
+  });
+  const findCol = (row, names) => {
+    for (const k of Object.keys(row)) {
+      for (const n of names) if (k.toLowerCase().trim() === n) return k;
+    }
+    return null;
+  };
+  if (!result.data.length) return [];
+  const r0 = result.data[0];
+  const latK = findCol(r0, ['lat','latitude','latitudine']);
+  const lonK = findCol(r0, ['lon','lng','longitude','longitudine']);
+  const leqK = findCol(r0, ['leq','leq_dba','db','dba','level','livello']);
+  if (!latK || !lonK || !leqK) {
+    alert(`Colonne non trovate. Servono: lat, lon, leq.\nTrovate: ${Object.keys(r0).join(', ')}`);
+    return [];
+  }
+  return result.data
+    .filter(r => typeof r[latK]==='number' && typeof r[lonK]==='number' && typeof r[leqK]==='number')
+    .map(r => ({ lat: r[latK], lon: r[lonK], leq: r[leqK] }));
+}
+
+const dropZone = document.getElementById('drop-zone');
+const csvInput = document.getElementById('csv-input');
+dropZone.addEventListener('click', () => csvInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+csvInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = parseCSV(e.target.result);
+    if (data.length) {
+      measureData = data;
+      dropZone.classList.add('has-file');
+      dropZone.innerHTML = `<strong>${file.name}</strong><br>
+        <span class="file-info">${data.length} punti caricati</span>
+        <input type="file" id="csv-input" accept=".csv,.txt" hidden>`;
+      document.getElementById('csv-input').addEventListener('change', e2 => {
+        if (e2.target.files[0]) handleFile(e2.target.files[0]);
+      });
+      renderMeasure();
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('load-sample-measure').addEventListener('click', () => {
+  measureData = generateSampleData();
+  renderMeasure();
+});
+
+['show-points', 'show-heatmap', 'show-isolines', 'class-norm'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderMeasure);
+});
+
+document.getElementById('btn-export-geojson').addEventListener('click', () => {
+  if (!measureData.length) { alert('Nessun dato.'); return; }
+  const fc = { type: 'FeatureCollection', features: measureData.map(p => ({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+    properties: { leq_dba: p.leq }
+  }))};
+  download(JSON.stringify(fc, null, 2), 'rilievi.geojson', 'application/geo+json');
+});
+document.getElementById('btn-export-csv').addEventListener('click', () => {
+  if (!measureData.length) { alert('Nessun dato.'); return; }
+  const csv = ['lat,lon,leq'].concat(measureData.map(p => `${p.lat},${p.lon},${p.leq}`)).join('\n');
+  download(csv, 'rilievi.csv', 'text/csv');
+});
+
+function download(content, fn, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fn; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// =====================================================================
+// PREDICT
+// =====================================================================
+
+function clearPredictionLayer() {
+  if (predictionLayer) { map.removeLayer(predictionLayer); predictionLayer = L.layerGroup(); }
+  if (sourceMarker) { map.removeLayer(sourceMarker); sourceMarker = null; }
+  document.getElementById('status-bar').classList.remove('active');
+  document.getElementById('calc-status').textContent = '';
+}
+
+function clearBuildingLayer() {
+  if (buildingLayer) { map.removeLayer(buildingLayer); buildingLayer = L.layerGroup(); }
+  if (buildingLabelLayer) { map.removeLayer(buildingLabelLayer); buildingLabelLayer = L.layerGroup(); }
+}
+
+map.on('click', async (e) => {
+  if (currentMode !== 'predict') return;
+  await placeSource(e.latlng);
+});
+
+async function placeSource(latlng) {
+  if (sourceMarker) map.removeLayer(sourceMarker);
+  sourceMarker = L.marker(latlng, {
+    icon: L.divIcon({ className: 'source-marker', iconSize: [16, 16] })
+  })
+  .bindTooltip('Sorgente', { direction: 'top', offset: [0, -8] })
+  .addTo(map);
+
+  // Scarica edifici
+  const extent = parseFloat(document.getElementById('grid-extent').value);
+  const radius = extent / 2 + 100;  // margin
+  setProgress('Scarico edifici da OpenStreetMap…');
+  try {
+    buildings = await fetchBuildings(latlng.lat, latlng.lng, radius);
+    document.getElementById('bld-status').textContent =
+      `${buildings.length} edifici caricati nell'intorno (${radius.toFixed(0)}m raggio).`;
+    updateBuildingStats();
+    renderBuildings();
+    hideProgress();
+  } catch (err) {
+    buildings = [];
+    document.getElementById('bld-status').textContent =
+      `⚠ Errore scaricamento edifici: ${err.message}. Calcolo procederà senza ostacoli.`;
+    document.getElementById('bld-quality').style.display = 'none';
+    hideProgress();
+  }
+
+  calculatePropagation(latlng);
+}
+
+/**
+ * v0.3: edificio renderizzato con colore fill basato su altezza.
+ * Gradient grigio: basso = chiaro, alto = scuro.
+ * In dark mode: inverso (basso = chiaro scuro, alto = quasi nero).
+ */
+function fillColorForHeight(h, isDark) {
+  // h: meters, mapping logarithmic-ish
+  // ranges: 0-6, 6-12, 12-20, 20+
+  let t;  // 0 = low, 1 = high
+  if (h < 6) t = 0.15;
+  else if (h < 12) t = 0.40;
+  else if (h < 20) t = 0.65;
+  else t = 0.85;
+
+  if (isDark) {
+    // dark theme: low = lighter gray (#666), high = #1a1a1a
+    const lo = [110, 110, 105], hi = [40, 40, 42];
+    const r = Math.round(lo[0] + (hi[0]-lo[0]) * t);
+    const g = Math.round(lo[1] + (hi[1]-lo[1]) * t);
+    const b = Math.round(lo[2] + (hi[2]-lo[2]) * t);
+    return `rgb(${r},${g},${b})`;
+  } else {
+    // light theme: low = #dadad6, high = #5e5e5a
+    const lo = [218, 218, 214], hi = [94, 94, 90];
+    const r = Math.round(lo[0] + (hi[0]-lo[0]) * t);
+    const g = Math.round(lo[1] + (hi[1]-lo[1]) * t);
+    const b = Math.round(lo[2] + (hi[2]-lo[2]) * t);
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+let buildingLabelLayer = L.layerGroup();
+
+function renderBuildings() {
+  clearBuildingLayer();
+  if (buildingLabelLayer) map.removeLayer(buildingLabelLayer);
+  buildingLabelLayer = L.layerGroup();
+
+  if (!document.getElementById('show-buildings').checked) return;
+  buildingLayer = L.layerGroup().addTo(map);
+
+  const isDark = document.body.getAttribute('data-theme') === 'dark';
+  const showLabels = document.getElementById('show-bld-labels').checked;
+  const zoom = map.getZoom();
+
+  buildings.forEach((b, idx) => {
+    if (!b.polygonLatLng) return;
+    const isEstimated = b.heightSource === 'default';
+    const fillColor = fillColorForHeight(b.height, isDark);
+    const borderColor = isDark ? '#2a2d33' : '#5e5e5a';
+
+    const polyOpts = {
+      color: borderColor,
+      weight: 1.2,
+      fillColor: fillColor,
+      fillOpacity: 0.65,
+      opacity: 0.85
+    };
+    if (isEstimated) {
+      polyOpts.dashArray = '4,3';
+      polyOpts.weight = 1.5;
+    }
+
+    const poly = L.polygon(b.polygonLatLng, polyOpts);
+    poly.bindTooltip(
+      `h ${b.height.toFixed(1)}m${isEstimated ? ' (stimata)' : ''}` +
+      (b.tags?.name ? ' · ' + b.tags.name : ''),
+      { direction: 'top', sticky: true }
+    );
+    poly.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      showBuildingDrawer(b);
+    });
+    poly.addTo(buildingLayer);
+
+    // Permanent label if requested and zoom is high enough
+    if (showLabels && zoom >= 17 && b.centroid) {
+      const labelText = `${Math.round(b.height)}m`;
+      const labelClass = 'bld-label' + (isEstimated ? ' estimated' : '');
+      L.marker(b.centroid, {
+        icon: L.divIcon({
+          className: labelClass,
+          html: labelText,
+          iconSize: [40, 14],
+          iconAnchor: [20, 7]
+        }),
+        interactive: false
+      }).addTo(buildingLabelLayer);
+    }
+  });
+
+  if (showLabels) buildingLabelLayer.addTo(map);
+}
+
+function showBuildingDrawer(b) {
+  const drawer = document.getElementById('bld-drawer');
+  const body = document.getElementById('bld-drawer-body');
+
+  const sourceLabel = {
+    'height': 'tag <code>height</code> OSM',
+    'levels': `<code>building:levels</code> × 3m`,
+    'default': `valore default (${document.getElementById('bld-default-h').value}m)`
+  }[b.heightSource];
+
+  const tagsToShow = ['name', 'building', 'building:levels', 'height', 'addr:street', 'addr:housenumber'];
+  let tagRows = '';
+  for (const tk of tagsToShow) {
+    if (b.tags && b.tags[tk]) {
+      tagRows += `<div class="bld-drawer-row"><span class="k">${tk}</span><span class="v">${b.tags[tk]}</span></div>`;
+    }
+  }
+
+  const isEst = b.heightSource === 'default';
+  body.innerHTML = `
+    <div class="bld-drawer-row">
+      <span class="k">Altezza</span>
+      <span class="v ${isEst ? 'estimated' : ''}">${b.height.toFixed(1)}m${isEst ? ' *' : ''}</span>
+    </div>
+    <div class="bld-drawer-row">
+      <span class="k">Fonte</span>
+      <span class="v" style="font-size:11px">${sourceLabel}</span>
+    </div>
+    ${b.levelsVal ? `<div class="bld-drawer-row"><span class="k">Piani</span><span class="v">${b.levelsVal}</span></div>` : ''}
+    ${tagRows}
+    <div class="bld-drawer-row" style="margin-top:8px">
+      <span class="k">OSM</span>
+      <span class="v"><a href="https://www.openstreetmap.org/way/${b.osmId}" target="_blank" rel="noopener">way/${b.osmId} ↗</a></span>
+    </div>
+  `;
+  drawer.classList.add('active');
+}
+
+document.getElementById('bld-drawer-close').addEventListener('click', () => {
+  document.getElementById('bld-drawer').classList.remove('active');
+});
+
+/**
+ * v0.3: aggiorna statistiche qualità dati edifici.
+ */
+function updateBuildingStats() {
+  const qDiv = document.getElementById('bld-quality');
+  if (!buildings.length) {
+    qDiv.style.display = 'none';
+    return;
+  }
+  qDiv.style.display = 'block';
+
+  const total = buildings.length;
+  const realHeight = buildings.filter(b => b.heightSource === 'height' || b.heightSource === 'levels').length;
+  const estimated = total - realHeight;
+  const heights = buildings.map(b => b.height);
+  const meanH = heights.reduce((a,b) => a+b, 0) / heights.length;
+  const maxH = Math.max(...heights);
+
+  document.getElementById('q-total').textContent = total;
+  document.getElementById('q-real').textContent = realHeight;
+  document.getElementById('q-est').textContent = estimated;
+  document.getElementById('q-mean').textContent = `${meanH.toFixed(1)} · ${maxH.toFixed(0)}m`;
+
+  const banner = document.getElementById('q-warn-banner');
+  const estPct = (estimated / total) * 100;
+  if (estPct > 70) {
+    banner.style.display = 'block';
+    banner.textContent = `⚠ ${Math.round(estPct)}% degli edifici ha altezza stimata. Il calcolo Maekawa qui non riflette il dato reale ma il default. Per affidabilità, lavora in zone con building:levels mappati o usa un dataset CAD verificato.`;
+  } else if (estPct > 40) {
+    banner.style.display = 'block';
+    banner.style.background = 'transparent';
+    banner.style.border = 'none';
+    banner.style.borderLeft = '2px solid var(--ink-2)';
+    banner.style.color = 'var(--ink-2)';
+    banner.textContent = `${Math.round(estPct)}% edifici con altezza stimata. Calcolo indicativo.`;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function setProgress(text) {
+  const p = document.getElementById('progress-bar');
+  p.textContent = text;
+  p.classList.add('active');
+}
+function hideProgress() {
+  document.getElementById('progress-bar').classList.remove('active');
+}
+
+function calculatePropagation(srcLatLng) {
+  map.removeLayer(predictionLayer);
+  predictionLayer = L.layerGroup().addTo(map);
+
+  const Lw = parseFloat(document.getElementById('src-lw').value);
+  const hs = parseFloat(document.getElementById('src-h').value);
+  const hr = parseFloat(document.getElementById('rec-h').value);
+  const extent = parseFloat(document.getElementById('grid-extent').value);
+  const step = parseFloat(document.getElementById('grid-step').value);
+  const G = parseFloat(document.getElementById('ground-G').value);
+  const T = parseFloat(document.getElementById('atm-T').value);
+  const RH = parseFloat(document.getElementById('atm-RH').value);
+  const spectrumKey = document.getElementById('src-spectrum').value;
+  const spectrum = SPECTRA[spectrumKey];
+  const useDiff = document.getElementById('enable-diffraction').checked && buildings.length > 0;
+
+  const status = document.getElementById('calc-status');
+  status.textContent = 'Calcolo in corso…';
+  setProgress('Calcolo propagazione…');
+
+  // Async chunked computation
+  setTimeout(() => {
+    const t0 = performance.now();
+    const grid = [];
+    const halfExt = extent / 2;
+    const metersToLat = 1 / 111111;
+    const metersToLon = 1 / (111111 * Math.cos(srcLatLng.lat * Math.PI / 180));
+
+    let nPoints = 0, nDiffracted = 0;
+    for (let dy = -halfExt; dy <= halfExt; dy += step) {
+      for (let dx = -halfExt; dx <= halfExt; dx += step) {
+        const r = Math.sqrt(dx * dx + dy * dy);
+        if (r < 2) continue;
+
+        let diffDelta = 0;
+        if (useDiff) {
+          const hit = firstBuildingHit(0, 0, dx, dy, buildings);
+          if (hit) {
+            diffDelta = pathDelta(hit.dSourceBld, hit.dBldRec, hs, hr, hit.height);
+            if (diffDelta > 0) nDiffracted++;
+          }
+        }
+
+        const Leq = propagatePoint(Lw, spectrum, r, hs, hr, T, RH, G, diffDelta);
+        if (Leq < 30) continue;
+        grid.push({
+          lat: srcLatLng.lat + dy * metersToLat,
+          lon: srcLatLng.lng + dx * metersToLon,
+          leq: Leq, dx, dy, r, diffracted: diffDelta > 0
+        });
+        nPoints++;
+      }
+    }
+
+    const showPred = document.getElementById('show-prediction').checked;
+    if (showPred) {
+      grid.forEach(p => {
+        L.circleMarker([p.lat, p.lon], {
+          radius: step * 0.4,
+          fillColor: colorForLevel(p.leq),
+          fillOpacity: opacityForLevel(p.leq),
+          stroke: false
+        })
+        .bindTooltip(
+          `${p.leq.toFixed(1)} dBA @ ${p.r.toFixed(0)}m` +
+          (p.diffracted ? ' · diffrazione' : ''),
+          { direction: 'top' })
+        .addTo(predictionLayer);
+      });
+    }
+
+    const showIso = document.getElementById('show-iso-bands').checked;
+    if (showIso) renderIsoLines(srcLatLng, grid, extent, step);
+
+    const t1 = performance.now();
+    const dt = t1 - t0;
+    status.textContent = `${nPoints} ricevitori · ${dt.toFixed(0)} ms`;
+    document.getElementById('status-bar').classList.add('active');
+    document.getElementById('status-bar').innerHTML = `
+      <span class="ok">●</span> Sorgente Lw=${Lw} dB · ${spectrumKey}<br>
+      Griglia ${Math.round(extent)}m · passo ${step}m · ${nPoints} ricevitori<br>
+      ${useDiff ? `${nDiffracted} ricevitori in ombra acustica` : 'Diffrazione disabilitata'}<br>
+      ISO 9613-2 · T=${T}°C RH=${RH}%
+    `;
+    hideProgress();
+  }, 20);
+}
+
+function renderIsoLines(srcLatLng, grid, extent, step) {
+  const N = Math.floor(extent / step) + 1;
+  const matrix = new Array(N * N).fill(-Infinity);
+  const halfExt = extent / 2;
+  grid.forEach(p => {
+    const i = Math.round((p.dy + halfExt) / step);
+    const j = Math.round((p.dx + halfExt) / step);
+    if (i >= 0 && i < N && j >= 0 && j < N) matrix[i*N+j] = p.leq;
+  });
+  for (let k = 0; k < matrix.length; k++) if (matrix[k] === -Infinity) matrix[k] = 25;
+
+  const thresholds = [40, 45, 50, 55, 60, 65, 70, 75];
+  const contours = d3.contours().size([N, N]).thresholds(thresholds)(matrix);
+
+  const metersToLat = 1 / 111111;
+  const metersToLon = 1 / (111111 * Math.cos(srcLatLng.lat * Math.PI / 180));
+
+  contours.forEach(contour => {
+    const lvl = contour.value;
+    contour.coordinates.forEach(polygon => {
+      polygon.forEach(ring => {
+        const latlngs = ring.map(([x, y]) => {
+          const dx = (x - N/2) * step, dy = (y - N/2) * step;
+          return [srcLatLng.lat + dy * metersToLat, srcLatLng.lng + dx * metersToLon];
+        });
+        L.polyline(latlngs, {
+          color: colorForLevel(lvl), weight: 1.5, opacity: 0.85
+        })
+        .bindTooltip(`${lvl} dBA`, { permanent: false })
+        .addTo(predictionLayer);
+      });
+    });
+  });
+}
+
+document.getElementById('btn-calc').addEventListener('click', () => {
+  if (!sourceMarker) { alert('Posiziona prima la sorgente cliccando sulla mappa.'); return; }
+  calculatePropagation(sourceMarker.getLatLng());
+});
+
+['src-lw','src-h','rec-h','grid-extent','grid-step','ground-G',
+ 'atm-T','atm-RH','src-spectrum','show-prediction','show-iso-bands',
+ 'enable-diffraction','bld-default-h'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', () => {
+    if (sourceMarker) calculatePropagation(sourceMarker.getLatLng());
+  });
+});
+
+document.getElementById('show-buildings').addEventListener('change', renderBuildings);
+document.getElementById('show-bld-labels').addEventListener('change', renderBuildings);
+
+// Re-render building labels quando cambia zoom (per nascondere/mostrare label permanenti)
+map.on('zoomend', () => {
+  if (currentMode === 'predict' && buildings.length) renderBuildings();
+});
+
+// Re-render edifici al cambio tema (per aggiornare gradiente colore)
+themeToggle.addEventListener('click', () => {
+  if (currentMode === 'predict' && buildings.length) {
+    setTimeout(() => renderBuildings(), 50);
+  }
+});
+
+// Chiudi drawer edificio cliccando fuori
+map.on('click', () => {
+  document.getElementById('bld-drawer').classList.remove('active');
+});
+
+// =====================================================================
+// VALIDATION
+// =====================================================================
+
+function runValidation() {
+  const expected = { 10: [65, 72], 100: [40, 48], 500: [20, 28] };
+  for (const d of [10, 100, 500]) {
+    const Leq = propagatePoint(100, SPECTRA.flat, d, 1.5, 1.5, 15, 70, 1.0, 0);
+    document.getElementById(`val-${d}`).textContent = Leq.toFixed(1) + ' dBA';
+    const [lo, hi] = expected[d];
+    let delta;
+    if (Leq < lo) delta = `${(Leq - lo).toFixed(1)}`;
+    else if (Leq > hi) delta = `+${(Leq - hi).toFixed(1)}`;
+    else delta = '✓ in range';
+    document.getElementById(`val-${d}-d`).textContent = delta;
+  }
+}
+
+// === INIT ===
+measureData = generateSampleData();
+renderMeasure();
+runValidation();
+</script>
+
+</body>
+</html>
