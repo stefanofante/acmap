@@ -11,7 +11,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Overpass API fallback chain (multiple mirrors) for robustness
 - Embedded sample buildings dataset (Treviso) as offline fallback
 - Comparison mode (measured vs predicted, RMSE / bias / residual map)
-- 3D snapshot view for export
+
+---
+
+## [0.4.0] — 2026-05-19
+
+### Added
+- Full EN UI with IT/EN runtime toggle (complete string dictionary; EN translations were already authored in the component)
+- Spherical propagation halo on measure-mode points, with on-map halo-note legend
+- Composite PNG screenshot export (map + legend + results; html2canvas lazy-loaded on first use)
+- Unified loading popup (single consistent overlay for CSV / Overpass / propagation)
+
+### Changed
+- Single-file standalone now declares CDN libs explicitly (Leaflet 1.9.4, leaflet-heat 0.2.0, PapaParse 5.4.1, d3-contour 4.0.2, html2canvas 1.4.1)
+- Fluid layout: bottom panel no internal scroll, mobile-responsive
+- Theme handling moved to html[data-theme] with persistence; theme-aware re-render of buildings/halo/heatmap
+
+### Technical
+- Physics/OSM/screenshot extracted verbatim from the ST-LINE site shared modules (develop HEAD, post-ef726c7); ISO 9613-2 + Maekawa unchanged; propagatePoint called with method:'maekawa' (byte-identical to proto v0.3 — regression preserved)
+- Synced with src/components/AcousticMap.astro
 
 ---
 
@@ -86,7 +104,8 @@ Initial demonstrative proto.
 
 ---
 
-[Unreleased]: https://github.com/stefanofante/acmap/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/stefanofante/acmap/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/stefanofante/acmap/releases/tag/v0.4.0
 [0.3.0]: https://github.com/stefanofante/acmap/releases/tag/v0.3.0
 [0.2.0]: https://github.com/stefanofante/acmap/releases/tag/v0.2.0
 [0.1.0]: https://github.com/stefanofante/acmap/releases/tag/v0.1.0

@@ -3,7 +3,12 @@
 > Browser-based acoustic mapping tool — visualize sound-level surveys
 > and simulate point-source propagation (ISO 9613-2) with Maekawa
 > diffraction on real OpenStreetMap building geometry.
+>
+> Strumento browser di mappatura acustica — visualizza rilievi
+> fonometrici e simula la propagazione da sorgente puntuale (ISO
+> 9613-2) con diffrazione Maekawa su edifici reali OpenStreetMap.
 
+[![Status](https://img.shields.io/badge/status-v0.4--working-orange.svg)](#roadmap)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![ISO 9613-2](https://img.shields.io/badge/Method-ISO%209613--2-informational)](https://www.iso.org/standard/20649.html)
 [![Live demo](https://img.shields.io/badge/demo-stline.it%2Fopen--lab-orange)](https://stline.it/open-lab/mappa-acustica)
@@ -12,191 +17,141 @@ A single-file, dependency-light demonstrative tool that runs entirely
 in the browser. No backend, no installation, no telemetry — open
 `index.html` and you have a working acoustic mapping environment.
 
-**Status**: proto v0.3. Demonstrative, not certified for legal use.
-See [Limitations](#limitations) before considering anything beyond
+**Status**: working proto v0.4. Demonstrative, not certified for legal
+use. See [Limitations](#limitations) before considering anything beyond
 education and exploration.
 
 ---
 
-## What it does
+## Features
 
-### Measure mode
-
-Load your sound-level surveys as a CSV (columns: `lat, lon, leq`).
-The tool renders the points on a Leaflet map with:
-
-- Color-coded markers per sound level (green < 50, lime < 60,
-  amber < 70, red ≥ 70 dB(A))
-- Kernel-density heatmap overlay
-- Inverse-distance-weighting (IDW) interpolated isolines (optional)
-- Aggregate statistics (mean, range, percent above legal limit)
-- DPCM 14/11/1997 acoustic class limit comparison (Italian classes I–VI)
-
-Exports: GeoJSON, cleaned CSV.
-
-### Predict mode
-
-Place a point source by clicking on the map. The tool:
-
-1. Fetches building geometry from OpenStreetMap (Overpass API) in
-   the surrounding area
-2. Computes Leq at each receiver of a configurable grid, per
-   third-octave band (63 Hz – 8 kHz), applying:
-   - Geometric divergence: `A_div = 20·log₁₀(d) + 11` — ISO 9613-2 §7.1
-   - Atmospheric absorption — ISO 9613-1 (T, RH dependent)
-   - Ground effect — ISO 9613-2 §7.3.2, generic G-factor method
-   - **Maekawa diffraction** over the first building intercepted on
-     the source→receiver path — ISO 9613-2 §7.4
-3. Sums band levels with A-weighting and produces a propagation map
-   with `d3-contour` isolines
-
-Source spectra preloaded: flat broadband, road traffic (NMPB-style),
-rail, industrial, low-frequency (HVAC-style). Atmosphere editable
-(T, RH).
-
-### Data transparency
-
-Buildings without OSM `height` or `building:levels` tags are flagged
-visually (dashed border) and statistically (panel counter). When more
-than 70% of buildings rely on the configurable default height, a
-warning banner appears — the calculation reflects the default, not
-reality.
-
-Click any building to open a side drawer with:
-- Used height + source (`height` tag / `building:levels × 3m` / default)
-- Relevant OSM tags
-- Direct link to the building's OSM page
+- ✅ **Measure mode** — load a CSV survey (`lat, lon, leq`):
+  color-coded markers, kernel-density heatmap, optional IDW
+  interpolated isolines, aggregate statistics, DPCM 14/11/1997
+  acoustic class limits (Italian classes I–VI), and a **spherical
+  propagation halo** on every measure point (visual `A_div`
+  reference) with an on-map halo legend note
+- ✅ **Predict mode** — place a point source, ISO 9613-2 propagation
+  per third-octave band (63 Hz – 8 kHz) with **Maekawa diffraction**
+  over the first OpenStreetMap building intercepted on the
+  source→receiver path; OSM building geometry auto-fetched via the
+  Overpass API
+- ✅ **Building data transparency** — estimated-height buildings
+  flagged (dashed border + counter); >70% estimated triggers a
+  warning banner; click any building for a drawer with used height,
+  height source (`height` tag / `building:levels × 3m` / default),
+  OSM tags and a link to the building's OSM page; permanent height
+  labels at high zoom
+- ✅ **IT / EN UI toggle** — full runtime language switch (complete
+  string dictionary; labels, tooltips, alerts, validation table,
+  drawer, docs and disclaimer all re-render)
+- ✅ **Unified loading popup** — one consistent overlay for CSV /
+  Overpass / propagation operations
+- ✅ **Screenshot PNG export** — composite map + legend + results,
+  `html2canvas` lazy-loaded on first use
+- ✅ **Exports** — GeoJSON and cleaned CSV (measure mode)
+- ✅ **Light + dark theme** — `html[data-theme]`, persisted, with
+  theme-aware re-render of buildings / halo / heatmap
+- ✅ **Fully client-side** — your data never leaves the page
 
 ---
 
 ## Quick start
 
-The tool is a **single HTML file** plus a few vendored libraries.
-No build step required.
-
-### Run locally
+Open `index.html` in a modern browser. **No build, no server.**
 
 ```bash
-# Clone
 git clone https://github.com/stefanofante/acmap.git
 cd acmap
-
-# Serve via local HTTP (required for Overpass API to work — CORS blocks file://)
-python3 -m http.server 8000
-# or:    npx http-server -p 8000
-# or:    Caddy: caddy file-server --listen :8000
-
-# Open in browser
-open http://localhost:8000
+# then just open index.html — or serve it:
+python3 -m http.server 8000   # http://localhost:8000
 ```
 
-**Why a local server and not just double-click?** Modern browsers
-block `fetch()` to external APIs from `file://` origins for CORS
-reasons. Overpass API (used to fetch building geometry) refuses
-those requests. A local HTTP server fixes this with no code change.
+First load needs an internet connection: the CDN libraries
+(Leaflet, leaflet-heat, PapaParse, d3-contour, html2canvas), the
+OpenStreetMap tiles, and the Overpass API are all fetched online.
 
-### Embed in your own page
-
-Copy `index.html` (and its vendored `vendor/` folder) into your
-static site. The tool is a single, self-contained component with
-no global state pollution outside an IIFE.
+**Caveat:** some browsers block `fetch()` from `file://` origins.
+The Overpass building download (Predict mode) may therefore require
+serving `index.html` from a local HTTP server rather than opening it
+by double-click. Measure mode works from `file://`.
 
 ---
 
 ## Limitations
 
 This is a **demonstrative tool**, deliberately limited in scope to
-remain understandable, fast, and honest. Limitations to be aware of
-before drawing conclusions:
+remain understandable, fast, and honest. Be aware of these limits
+before drawing conclusions.
 
 ### Physics
 
-- **Point source only.** No line sources (roads), no area sources
-  (industrial plants), no source directivity.
+- **Point source only.** No line sources (roads), no area sources,
+  no source directivity.
 - **Single diffraction.** Only the first building intercepted on the
   source→receiver path is considered. Multi-building diffraction in
   cascade (common in dense urban canyons) is not modeled — the tool
   underestimates attenuation behind rows of buildings.
 - **Diffraction over only.** No lateral diffraction around building
-  edges. Real diffraction has both paths; we model only the vertical.
-- **No reflections.** Sound reflecting off building façades to amplify
+  edges; only the vertical (over-the-top) path is modeled.
+- **No reflections.** Sound reflecting off façades to amplify
   street-canyon levels is not modeled.
-- **No meteorological profiles.** No wind gradient, no temperature
-  gradient. Standard atmosphere assumed.
+- **No meteorological profiles.** No wind/temperature gradient;
+  standard atmosphere assumed.
 - **Simplified ground.** Generic broadband G-factor method (§7.3.2),
-  not the more accurate frequency-dependent region method (§7.3.1).
-- **No CNOSSOS-EU / NMPB-Routes-2008.** These European/French methods
-  for harmonized traffic noise mapping are not implemented.
+  not the frequency-dependent region method (§7.3.1).
+- **No CNOSSOS-EU / NMPB-Routes-2008.**
 
 ### Data
 
 - **OSM building heights are often missing.** Even in major Italian
-  cities, the `height` tag is rare. The tool falls back to
-  `building:levels × 3m` if available, then to a user-configurable
-  default (default 9m). Visualized accordingly (dashed borders for
-  estimated). Validate before trusting numbers in any specific area.
-- **No address/CAD validation.** Geometry comes as-is from OSM. For
-  legal use you need surveyed CAD data, not crowdsourced footprints.
-- **No version pinning of OSM data.** Each fetch hits live Overpass.
-  If buildings get added/removed/edited in OSM, your result will
-  change without notice.
+  cities the `height` tag is rare. The tool falls back to
+  `building:levels × 3m`, then to a user-configurable default
+  (9m). Estimated heights are shown with dashed borders. Validate
+  before trusting numbers for a specific area.
+- **No address/CAD validation.** Geometry is OSM as-is. Legal use
+  needs surveyed CAD data, not crowdsourced footprints.
+- **No version pinning of OSM data.** Each fetch hits live Overpass;
+  results change as OSM changes.
 
 ### Validation
 
-Built-in validation table compares output against a simple
-literature test case (point source Lw=100 dB(A) broadband flat,
+The built-in validation table compares output against a simple
+literature test case (point source Lw=100 dB(A) flat broadband,
 soft ground, standard atmosphere). **Not ISO-certified validation.**
-A proper benchmark suite against standardized test cases (CSTB,
-IFSTTAR, or annexed examples) is pending.
 
 ### Bottom line
 
 **Do not use this tool for legal acoustic assessments, environmental
-impact studies, building permit applications, or any decision where
-inaccuracy carries consequences.** For those, use:
-
-- A certified commercial tool: CadnaA, SoundPLAN, Predictor-LimA
-- A maintained open-source tool with full CNOSSOS-EU support:
-  [NoiseModelling](https://noise-planet.org/noisemodelling.html)
-  (Java/H2GIS)
-- A registered "Tecnico Competente in Acustica" (Italy: ENTECA) for
-  legal compliance work
+impact studies, building-permit applications, or any decision where
+inaccuracy carries consequences.** For those use a certified tool
+(CadnaA, SoundPLAN, Predictor-LimA), a maintained open-source tool
+with full CNOSSOS-EU support
+([NoiseModelling](https://noise-planet.org/noisemodelling.html)),
+or a registered "Tecnico Competente in Acustica" (Italy: ENTECA).
 
 ---
 
-## Architecture
+## Tech stack
 
-```
-acmap/
-├── index.html              # Self-contained tool (HTML + CSS + JS)
-├── vendor/                 # Bundled third-party libraries
-│   ├── leaflet/
-│   │   ├── leaflet.css
-│   │   └── leaflet.js
-│   ├── leaflet-heat.js
-│   ├── papaparse.min.js
-│   └── d3-contour.min.js
-├── examples/
-│   ├── treviso-sample.csv  # Synthetic sample dataset (47 points)
-│   └── README.md
-├── docs/
-│   ├── physics.md          # ISO 9613-2 + Maekawa derivation
-│   ├── api.md              # JS function reference
-│   └── screenshots/
-├── LICENSE                 # Apache-2.0
-├── NOTICE                  # Third-party attributions
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-└── README.md
-```
+- [Leaflet](https://leafletjs.com/) 1.9.4 — map rendering
+- [leaflet-heat](https://github.com/Leaflet/Leaflet.heat) 0.2.0 —
+  kernel-density heatmap
+- [PapaParse](https://www.papaparse.com/) 5.4.1 — CSV parsing
+- [d3-contour](https://github.com/d3/d3-contour) 4.0.2 —
+  propagation isolines
+- [html2canvas](https://html2canvas.hertzen.com/) 1.4.1 — composite
+  screenshot (lazy-loaded on first use)
+- [OpenStreetMap](https://www.openstreetmap.org/) tiles +
+  [Overpass API](https://overpass-api.de/) — building geometry
+- Vanilla JavaScript (ES2020+), single HTML file, no build step
+- Acoustic model: **ISO 9613-2:1996** (§7.1 divergence, §7.3.2
+  ground, §7.4 screening) + ISO 9613-1 atmospheric absorption +
+  **Maekawa (1968)** diffraction
 
-All physics is in `index.html` inside a single IIFE. The intent is
-**maximum portability**: drop the folder anywhere, open via local
-server, it runs.
-
-When the codebase grows beyond this file (e.g., a Confronto mode or
-multi-source), the physics code will be extracted into a separate
-ES module under `src/physics/` and the tool refactored to import it.
+The physics, OSM-fetch and screenshot code is extracted verbatim
+from the shared ST-LINE site modules; the standalone tool is a
+single self-contained file that drops anywhere and runs.
 
 ---
 
@@ -206,33 +161,23 @@ ES module under `src/physics/` and the tool refactored to import it.
 |---|---|---|
 | v0.1 | shipped | Static wireframe, no real physics |
 | v0.2 | shipped | Real ISO 9613-2, atmospheric absorption, ground |
-| v0.3 | **current** | OSM buildings, Maekawa diffraction, data transparency |
-| v0.4 | planned | Robustness: Overpass fallback, embedded fallback dataset |
-| v0.5 | planned | Comparison mode (measured vs predicted, RMSE/bias) |
-| v0.6 | planned | 3D snapshot view for export/screenshots |
+| v0.3 | shipped | OSM buildings, Maekawa diffraction, data transparency |
+| v0.4 | **current** | EN i18n toggle, spherical halo, screenshot export, unified loading popup, fluid layout |
+| v0.5 | planned | Robustness: Overpass mirror fallback, embedded offline dataset |
+| v0.6 | planned | Comparison mode (measured vs predicted, RMSE/bias) |
 
-The roadmap is opportunistic, not commitments. Maintained as a hobby
-project parallel to commercial work on
-[Acustica Pro](https://stline.it).
+The roadmap is opportunistic, not a set of commitments. Maintained
+as a hobby project parallel to commercial work on
+[Acustica Pro](https://stline.it/prodotti/acustica-pro).
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md)
-for guidelines. By submitting a contribution, you agree it is
-licensed under Apache-2.0.
-
-Areas where help is particularly welcome:
-
-- **Validation** against documented test cases (ISO 9613-2 Annex,
-  CSTB benchmarks, real measurement campaigns)
-- **Performance** on mobile / low-end devices
-- **Internationalization** — currently the UI mixes Italian and
-  English; clean i18n would help
-- **Multi-diffraction** (ISO 9613-2 §7.4 multi-screen formula)
-- **Building height** improvement: OSM tag mining, alternative
-  height datasets (3D Building Model from public sources)
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md).
+By submitting a contribution you agree it is licensed under
+Apache-2.0. Help is particularly welcome on validation against
+documented test cases, mobile performance, and multi-diffraction.
 
 ---
 
@@ -254,10 +199,10 @@ upcoming professional software for environmental acoustics analysis.
 ## See also
 
 - [`noise-barrier-calc`](https://github.com/stefanofante/noise-barrier-calc)
-  — companion tool for noise-barrier attenuation calculation,
-  sharing the same physics engine
+  — companion tool for noise-barrier attenuation, sharing the same
+  physics engine
 - [stline.it/open-lab](https://stline.it/open-lab) — full list of
-  ST-LINE Open Lab projects (firmware, embedded, tooling, demos)
+  ST-LINE Open Lab projects
 
 ---
 
