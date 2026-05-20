@@ -561,6 +561,28 @@
   @media (max-width: 700px) {
     .cta-inner { flex-direction: column; align-items: flex-start; }
   }
+
+  /* v0.5 — Results explainer + stat sublabels (measure-mode survey) */
+  .results-explainer {
+    padding: 14px 16px; margin: 0 0 14px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 6px;
+  }
+  .results-explainer-title {
+    font-family: var(--f-mono); font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-2); margin: 0 0 8px;
+  }
+  .results-explainer-text {
+    font-size: 13px; line-height: 1.6; color: var(--ink-2); margin: 0;
+  }
+  .results-explainer-text strong { color: var(--ink); }
+  .results-explainer-text em { color: var(--accent); font-style: normal; }
+  .stat-sublabel {
+    font-family: var(--f-mono); font-size: 10.5px;
+    color: var(--muted); margin-top: 4px; line-height: 1.3;
+  }
 </style>
 </head>
 <body>
@@ -597,7 +619,7 @@
     <h1 class="am-h1"><span id="hero-h1-pre">Mappa </span><em id="hero-h1-em">acustica</em>.</h1>
     <p class="hero-sub" id="hero-sub"></p>
     <div class="hero-meta">
-      <span class="tag beta">PROTO · v0.4</span>
+      <span class="tag beta">PROTO · v0.5</span>
       <span class="tag">ISO 9613-2</span>
       <span class="tag" id="hero-tag-maekawa">Diffrazione Maekawa</span>
       <span class="tag" id="hero-tag-osm">Edifici OSM</span>
@@ -680,11 +702,15 @@
 
         <div class="tool-panel-section span-2" id="acmap-results">
           <h3 class="panel-title" id="m-stats">Statistiche</h3>
+          <section class="results-explainer">
+            <h4 class="results-explainer-title" id="m-results-explainer-title">Cosa rappresentano i risultati</h4>
+            <p class="results-explainer-text" id="m-results-explainer-text"></p>
+          </section>
           <div class="stats-grid">
-            <div class="stat-box"><div class="stat-label" id="lbl-stat-points">Punti</div><div class="stat-value" id="stat-points">—</div></div>
-            <div class="stat-box"><div class="stat-label" id="lbl-stat-mean">Leq medio</div><div class="stat-value" id="stat-mean">—</div></div>
-            <div class="stat-box"><div class="stat-label">Min · Max</div><div class="stat-value" id="stat-range">—</div></div>
-            <div class="stat-box"><div class="stat-label" id="lbl-stat-over">Sopra limite</div><div class="stat-value" id="stat-over">—</div></div>
+            <div class="stat-box"><div class="stat-label" id="lbl-stat-points">Punti</div><div class="stat-value" id="stat-points">—</div><div class="stat-sublabel" id="sub-stat-points">punti del rilievo caricato</div></div>
+            <div class="stat-box"><div class="stat-label" id="lbl-stat-mean">Leq medio</div><div class="stat-value" id="stat-mean">—</div><div class="stat-sublabel" id="sub-stat-mean">media aritmetica dei punti misurati</div></div>
+            <div class="stat-box"><div class="stat-label">Min · Max</div><div class="stat-value" id="stat-range">—</div><div class="stat-sublabel" id="sub-stat-range">estremi singoli del rilievo</div></div>
+            <div class="stat-box"><div class="stat-label" id="lbl-stat-over">Sopra limite</div><div class="stat-value" id="stat-over">—</div><div class="stat-sublabel" id="sub-stat-over">punti sopra il limite normativo</div></div>
           </div>
         </div>
 
@@ -918,6 +944,12 @@
       lblStatPoints: 'Punti',
       lblStatMean: 'Leq medio',
       lblStatOver: 'Sopra limite',
+      resultsExplainerTitle: 'Cosa rappresentano i risultati',
+      resultsExplainerText: 'Le statistiche descrivono il <strong>rilievo fonometrico caricato</strong> (CSV con lat, lon, Leq), non la propagazione. <strong>PUNTI</strong> è il numero di ricevitori del rilievo. <strong>LEQ MEDIO</strong> è la <em>media aritmetica</em> dei livelli misurati. <strong>MIN · MAX</strong> sono i valori estremi singoli. <strong>SOPRA LIMITE</strong> è la percentuale di punti che superano il limite normativo selezionato. La propagazione calcolata (modalità Previsione, con eventuale diffrazione su edifici) è riportata nella barra di stato della mappa.',
+      subStatPoints: 'punti del rilievo caricato',
+      subStatMean: 'media aritmetica dei punti misurati',
+      subStatRange: 'estremi singoli del rilievo',
+      subStatOver: 'punti sopra il limite normativo',
       mExport: 'Esporta',
       btnGeojson: '↓ GeoJSON',
       btnCsvClean: '↓ CSV ripulito',
@@ -1045,6 +1077,12 @@
       lblStatPoints: 'Points',
       lblStatMean: 'Mean Leq',
       lblStatOver: 'Above limit',
+      resultsExplainerTitle: 'What the results represent',
+      resultsExplainerText: 'The statistics describe the <strong>loaded sound-level survey</strong> (CSV with lat, lon, Leq), not the propagation. <strong>POINTS</strong> is the number of survey receivers. <strong>MEAN LEQ</strong> is the <em>arithmetic mean</em> of the measured levels. <strong>MIN · MAX</strong> are the individual extremes. <strong>ABOVE LIMIT</strong> is the percentage of points exceeding the selected regulatory limit. The computed propagation (Predict mode, with optional building diffraction) is reported in the map status bar.',
+      subStatPoints: 'loaded survey receivers',
+      subStatMean: 'arithmetic mean of measured points',
+      subStatRange: 'individual survey extremes',
+      subStatOver: 'points above the regulatory limit',
       mExport: 'Export',
       btnGeojson: '↓ GeoJSON',
       btnCsvClean: '↓ Cleaned CSV',
@@ -1487,6 +1525,13 @@
     setText('lbl-stat-points', s.lblStatPoints);
     setText('lbl-stat-mean', s.lblStatMean);
     setText('lbl-stat-over', s.lblStatOver);
+    setText('m-results-explainer-title', s.resultsExplainerTitle);
+    var _expEl = document.getElementById('m-results-explainer-text');
+    if (_expEl) _expEl.innerHTML = s.resultsExplainerText;
+    setText('sub-stat-points', s.subStatPoints);
+    setText('sub-stat-mean', s.subStatMean);
+    setText('sub-stat-range', s.subStatRange);
+    setText('sub-stat-over', s.subStatOver);
     setText('m-export', s.mExport);
     setText('btn-export-geojson', s.btnGeojson);
     setText('btn-export-csv', s.btnCsvClean);
@@ -2090,7 +2135,7 @@
         poly.bindTooltip(
           'h ' + b.height.toFixed(1) + 'm' + (isEstimated ? ' (' + s.estimatedShort + ')' : '') +
           ((b.tags && b.tags.name) ? ' · ' + b.tags.name : ''),
-          { direction: 'top', sticky: true }
+          { direction: 'top', offset: [0, -8], sticky: true }
         );
         poly.on('click', function (e) {
           L.DomEvent.stopPropagation(e);

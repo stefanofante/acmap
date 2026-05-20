@@ -8,7 +8,7 @@
 > fonometrici e simula la propagazione da sorgente puntuale (ISO
 > 9613-2) con diffrazione Maekawa su edifici reali OpenStreetMap.
 
-[![Status](https://img.shields.io/badge/status-v0.4--working-orange.svg)](#roadmap)
+[![Status](https://img.shields.io/badge/status-v0.5--working-orange.svg)](#roadmap)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![ISO 9613-2](https://img.shields.io/badge/Method-ISO%209613--2-informational)](https://www.iso.org/standard/20649.html)
 [![Live demo](https://img.shields.io/badge/demo-stline.it%2Fopen--lab-orange)](https://stline.it/open-lab/mappa-acustica)
@@ -17,7 +17,7 @@ A single-file, dependency-light demonstrative tool that runs entirely
 in the browser. No backend, no installation, no telemetry — open
 `index.html` and you have a working acoustic mapping environment.
 
-**Status**: working proto v0.4. Demonstrative, not certified for legal
+**Status**: working proto v0.5. Demonstrative, not certified for legal
 use. See [Limitations](#limitations) before considering anything beyond
 education and exploration.
 
@@ -162,9 +162,10 @@ single self-contained file that drops anywhere and runs.
 | v0.1 | shipped | Static wireframe, no real physics |
 | v0.2 | shipped | Real ISO 9613-2, atmospheric absorption, ground |
 | v0.3 | shipped | OSM buildings, Maekawa diffraction, data transparency |
-| v0.4 | **current** | EN i18n toggle, spherical halo, screenshot export, unified loading popup, fluid layout |
-| v0.5 | planned | Robustness: Overpass mirror fallback, embedded offline dataset |
-| v0.6 | planned | Comparison mode (measured vs predicted, RMSE/bias) |
+| v0.4 | shipped | EN i18n toggle, spherical halo, screenshot export, unified loading popup, fluid layout |
+| v0.5 | **current** | Results explainer + per-stat sublabels (measure-mode survey clarity), OSM building tooltip offset |
+| v0.6 | planned | Robustness: Overpass mirror fallback, embedded offline dataset |
+| v0.7 | planned | Comparison mode (measured vs predicted, RMSE/bias) |
 
 The roadmap is opportunistic, not a set of commitments. Maintained
 as a hobby project parallel to commercial work on

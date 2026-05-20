@@ -14,6 +14,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] — 2026-05-20
+
+### Added
+- Results explainer block above the stat-boxes ("Cosa rappresentano i risultati" / "What the results represent"): always-visible bilingual prose clarifying that the statistics describe the **loaded measurement survey** (not the propagation), with the arithmetic-mean nature of "Leq medio" called out explicitly.
+- Per-stat mono sublabel under each stat-value (Punti / Leq medio / Min · Max / Sopra limite) explaining what each is computed on.
+
+### Changed
+- OSM building tooltip now includes an explicit `offset: [0, -8]` (was `{ direction: 'top', sticky: true }` only) so the tooltip sits cleanly above the polygon and matches the source-tooltip convention.
+
+### i18n
+- New keys (IT + EN) in the standalone `STRINGS` dictionary: `resultsExplainerTitle`, `resultsExplainerText`, `subStatPoints`, `subStatMean`, `subStatRange`, `subStatOver`. Wired into the i18n-apply path (`setText` for label/sublabels, `innerHTML` for the explainer paragraph which carries `<strong>`/`<em>` markup).
+
+### Notes
+- The 4 stat-boxes describe the **measure-mode CSV survey**: `Leq medio` is the **arithmetic** mean (`reduce/length`), not the energy-averaged mean. The explainer text is written to reflect this accurately. No physics changes.
+
+---
+
 ## [0.4.0] — 2026-05-19
 
 ### Added
