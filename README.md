@@ -58,23 +58,56 @@ education and exploration.
 
 ## Quick start
 
-Open `index.html` in a modern browser. **No build, no server.**
+The project is a static site: one `index.html`, the JS lives under
+`js/`. **No build, no bundler, no backend.**
 
 ```bash
 git clone https://github.com/stefanofante/acmap.git
 cd acmap
-# then just open index.html — or serve it:
-python3 -m http.server 8000   # http://localhost:8000
 ```
+
+### Run a local micro-server
+
+Predict mode performs `fetch()` calls to the Overpass API, and most
+browsers block `fetch()` from `file://` origins. Serve the folder
+from any HTTP server on `localhost`. Pick whichever is already
+installed on your machine:
+
+```bash
+# Python 3 (cross-platform, no install needed on most systems)
+python3 -m http.server 8000
+# Windows: py -3 -m http.server 8000
+
+# Node.js (one-shot, no global install)
+npx --yes http-server -p 8000 -c-1
+
+# PHP
+php -S localhost:8000
+
+# VS Code: install the "Live Server" extension and click "Go Live"
+```
+
+Then open <http://localhost:8000> in a modern browser.
+
+> Measure mode (CSV-only workflow) also works by double-clicking
+> `index.html`; only Predict mode strictly requires the server
+> because of the Overpass `fetch()`.
 
 First load needs an internet connection: the CDN libraries
 (Leaflet, leaflet-heat, PapaParse, d3-contour, html2canvas), the
 OpenStreetMap tiles, and the Overpass API are all fetched online.
 
-**Caveat:** some browsers block `fetch()` from `file://` origins.
-The Overpass building download (Predict mode) may therefore require
-serving `index.html` from a local HTTP server rather than opening it
-by double-click. Measure mode works from `file://`.
+### Project layout
+
+```
+acmap/
+├── index.html        # markup, styles, CDN <script> tags
+├── js/
+│   └── acmap.js      # full application logic (commented, English-only)
+├── examples/         # sample CSV survey
+├── docs/             # physics + usage notes
+└── vendor/           # placeholder for offline-vendored libs (optional)
+```
 
 ---
 
